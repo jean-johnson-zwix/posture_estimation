@@ -1,0 +1,15 @@
+# Posture Estimation
+
+## Phase 1: Detect Posture using Media Pipe
+
+### Media Pipe
+
+MediaPipe Solutions provides a suite of libraries and tools for you to quickly apply artificial intelligence (AI) and machine learning (ML) techniques in your applications.
+
+#### Pose Landmark Detection
+
+The MediaPipe Pose Landmarker task lets you detect landmarks of human bodies in an image or video. You can use this task to identify key body locations, analyze posture, and categorize movements. This task uses machine learning (ML) models that work with single images or video. The task outputs body pose landmarks in image coordinates and in 3-dimensional world coordinates.
+
+*Model Used:* Pose landmarker (lite)
+*Mode*: VIDEO
+
