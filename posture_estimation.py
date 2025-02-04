@@ -21,7 +21,27 @@ Original file is located at
 from google.colab import drive
 drive.mount('/content/drive')
 
-"""## Create Pose Landmarker (VIDEO MODE)"""
+"""## Phase 1: Posture Detection
+
+### Create Landmarker for video
+"""
+
+import mediapipe as mp
+
+# VIDEO Model Landmarker
+BaseOptions = mp.tasks.BaseOptions
+PoseLandmarker = mp.tasks.vision.PoseLandmarker
+PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
+VisionRunningMode = mp.tasks.vision.RunningMode
+
+# Create a pose landmarker instance with the video mode:
+options = PoseLandmarkerOptions(
+    base_options=BaseOptions(model_asset_path='/content/pose_landmarker.task'),
+    running_mode=VisionRunningMode.VIDEO)
+
+landmarker = PoseLandmarker.create_from_options(options)
+
+"""### Draw Landmark"""
 
 from mediapipe import solutions
 from mediapipe.framework.formats import landmark_pb2
@@ -51,20 +71,161 @@ def draw_landmarks_on_image(rgb_image, detection_result, thickness=4, circle_rad
 
   return annotated_image
 
-import mediapipe as mp
+"""### Compute Posture Angles"""
 
-# VIDEO Model Landmarker
-BaseOptions = mp.tasks.BaseOptions
-PoseLandmarker = mp.tasks.vision.PoseLandmarker
-PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
-VisionRunningMode = mp.tasks.vision.RunningMode
+import cv2
+import numpy as np
+import math
 
-# Create a pose landmarker instance with the video mode:
-options = PoseLandmarkerOptions(
-    base_options=BaseOptions(model_asset_path='/content/pose_landmarker.task'),
-    running_mode=VisionRunningMode.VIDEO)
+def calculate_angle(point1, point2, vertex):
+    try:
+        a = np.array(point1)
+        b = np.array(vertex)
+        c = np.array(point2)
 
-landmarker = PoseLandmarker.create_from_options(options)
+        ba = a - b
+        bc = c - b
+
+        # Check for zero vectors
+        if np.all(ba == 0) or np.all(bc == 0):
+            return 0
+
+        cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
+        angle = np.arccos(np.clip(cosine_angle, -1.0, 1.0))
+        return np.degrees(angle)
+    except Exception as e:
+        print(f"Error calculating angle: {e}")
+        return 0
+
+def get_perpendicular_line(point1, point2, length=200):
+    try:
+        # Get midpoint
+        mid_x = (point1[0] + point2[0]) // 2
+        mid_y = (point1[1] + point2[1]) // 2
+
+        # Calculate direction vector
+        dx = point2[0] - point1[0]
+        dy = point2[1] - point1[1]
+
+        # Check for zero magnitude
+        magnitude = math.sqrt(dx*dx + dy*dy)
+        if magnitude < 1e-6:
+            return (mid_x, mid_y), (mid_x, mid_y - length), (mid_x, mid_y + length)
+
+        # Get perpendicular vector (-dy, dx)
+        perp_dx = -dy
+        perp_dy = dx
+
+        # Normalize and scale
+        perp_dx = int((perp_dx / magnitude) * length)
+        perp_dy = int((perp_dy / magnitude) * length)
+
+        perp_point1 = (mid_x + perp_dx, mid_y + perp_dy)
+        perp_point2 = (mid_x - perp_dx, mid_y - perp_dy)
+
+        return (mid_x, mid_y), perp_point1, perp_point2
+    except Exception as e:
+        print(f"Error calculating perpendicular line: {e}")
+        return (point1[0], point1[1]), point1, point2
+
+def add_legend(image, items, start_y=30):
+    for i, (text, color) in enumerate(items):
+        y = start_y + (i * 20)  # Reduced spacing
+        cv2.putText(image, text, (10, y), cv2.FONT_HERSHEY_SIMPLEX,
+                   0.5, color, 1, cv2.LINE_AA)  # Smaller font
+        cv2.line(image, (160, y-5), (200, y-5), color, 2)  # Adjusted line position
+
+def calculate_midpoint(point1, point2):
+    return ((point1[0] + point2[0])//2, (point1[1] + point2[1])//2)
+
+def overlay_posture_angles(image_rgb, pose_landmarks):
+
+    h, w = image_rgb.shape[:2]
+
+    def to_px(i):
+        lm = pose_landmarks[i]
+        return (int(lm.x * w), int(lm.y * h))
+
+    try:
+		    # Extract key landmarks using the provided indices
+        nose = to_px(0)
+        left_shoulder  = to_px(11)
+        right_shoulder = to_px(12)
+        left_hip  = to_px(23)
+        right_hip = to_px(24)
+        left_knee  = to_px(25)
+        right_knee = to_px(26)
+
+		    # Calculate additional points (33: hip_mid, 34: neck_mid)
+        hip_mid  = calculate_midpoint(left_hip, right_hip)
+        neck_mid = calculate_midpoint(left_shoulder, right_shoulder)
+
+		    # Calculate body angle for hips, neck and knees
+        knee_mid = calculate_midpoint(left_knee, right_knee)
+        hip_up   = (hip_mid[0],  hip_mid[1] - 100)
+        hip_down = (hip_mid[0],  hip_mid[1] + 100)
+        neck_up  = (neck_mid[0], neck_mid[1] - 100)
+
+        # Determine if sitting/standing based on leg angle
+        leg_angle = calculate_angle(hip_down, knee_mid, hip_mid)
+        is_standing = leg_angle < 50
+
+		    # Calculate key angles
+        # Torso lean (hip+neck vs vertical)
+        torso_lean = calculate_angle(hip_up, neck_mid, hip_mid)
+
+        # Forward head / bending (neck+nose vs vertical)
+        head_forward = calculate_angle(neck_up, nose, neck_mid)
+
+        # Shoulder tilt (shoulder line vs horizontal)
+        dx = (right_shoulder[0] - left_shoulder[0])
+        dy = (right_shoulder[1] - left_shoulder[1])
+        shoulder_tilt = abs(math.degrees(math.atan2(dy, dx + 1e-9)))  # 0 = level
+
+        # draw on BGR for correct OpenCV colors
+        img_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+
+        # colors (BGR)
+        BODY_COLOR = (0, 255, 255)
+        SHOULDER_COLOR = (0, 255, 0)
+        NECK_COLOR = (255, 0, 0)
+        LEG_COLOR = (255, 0, 255)
+        REF_COLOR = (128, 128, 128)
+
+        # lines
+        cv2.line(img_bgr, left_shoulder, right_shoulder, SHOULDER_COLOR, 2)
+        cv2.line(img_bgr, left_hip, right_hip, BODY_COLOR, 2)
+        cv2.line(img_bgr, hip_mid, neck_mid, BODY_COLOR, 2)
+        cv2.line(img_bgr, hip_mid, knee_mid, LEG_COLOR, 2)
+        cv2.line(img_bgr, hip_mid, hip_up, REF_COLOR, 1, cv2.LINE_AA)
+        cv2.line(img_bgr, neck_mid, neck_up, REF_COLOR, 1, cv2.LINE_AA)
+        cv2.line(img_bgr, neck_mid, nose, NECK_COLOR, 2)
+
+        # points
+        cv2.circle(img_bgr, hip_mid, 4, (0, 0, 255), -1)
+        cv2.circle(img_bgr, neck_mid, 4, (0, 255, 0), -1)
+
+        measurements = [
+            (f"Leg Angle: {leg_angle:.0f}° ({'Standing' if is_standing else 'Sitting'})", LEG_COLOR),
+            (f"Torso Lean: {torso_lean:.0f}° ({'Good' if torso_lean < 25 else 'Poor'})", BODY_COLOR),
+            (f"Forward Head: {head_forward:.0f}° ({'Good' if head_forward < 15 else 'Poor'}) (only for side-view)", NECK_COLOR),
+            (f"Shoulder Tilt: {shoulder_tilt:.0f}° ({'Good' if shoulder_tilt < 10 else 'Poor'})", SHOULDER_COLOR),
+        ]
+        add_legend(img_bgr, measurements, start_y=30)
+
+        out_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+        metrics = {
+            "leg_angle": leg_angle,
+            "is_standing": is_standing,
+            "torso_lean": torso_lean,
+            "head_forward": head_forward,
+            "shoulder_tilt": shoulder_tilt,
+        }
+        return out_rgb, metrics
+
+    except Exception as e:
+        return image_rgb, None
 
 """# Gradio Live Demo"""
 
@@ -73,6 +234,14 @@ import time
 import cv2
 import gradio
 from fastrtc import Stream, VideoStreamHandler, AdditionalOutputs
+
+# Define colors
+NECK_COLOR = (255, 0, 0)      # Blue
+BODY_COLOR = (0, 255, 255)    # Yellow
+SHOULDER_COLOR = (0, 255, 0)  # Green
+LEG_COLOR = (255, 0, 255)     # Magenta
+REFERENCE_COLOR = (128, 128, 128)  # Gray
+BENDING_COLOR = (255, 165, 0)  # Orange
 
 def process_frame(frame):
     global last_timestamp
@@ -90,22 +259,21 @@ def process_frame(frame):
         return frame, f"error: {e}"
     # visualize the pose
     annotated_frame = draw_landmarks_on_image(frame, result, thickness=5, circle_radius=8)
+    # visualize posture angles
+    first_pose = result.pose_landmarks[0] if result.pose_landmarks else None
+    annotated_frame, metrics = overlay_posture_angles(annotated_frame, first_pose)
     return annotated_frame, "<posture estimation results>"
 
 
 with gradio.Blocks() as demo:
     gradio.Markdown("## Posture Detection with MediaPipe PoseLandmarker")
-    with gradio.Row():
-        with gradio.Column():
-            cam = gradio.Image(label="Webcam", sources="webcam", type="numpy")            
-        with gradio.Column():
-            out_img = gradio.Image(label="Annotated", streaming=True)
-            out_md = gradio.Markdown()
+    cam = gradio.Image(label="Live View (Annotated)", sources="webcam", type="numpy")
+    out_md = gradio.Markdown()
 
     cam.stream(
         fn=process_frame,
         inputs=cam,
-        outputs=[out_img, out_md],
+        outputs=[cam, out_md],
         time_limit=60,
         stream_every=0.25,
         concurrency_limit=1

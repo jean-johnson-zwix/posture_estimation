@@ -13,3 +13,22 @@ The MediaPipe Pose Landmarker task lets you detect landmarks of human bodies in 
 *Model Used:* Pose landmarker (lite)
 *Mode*: VIDEO
 
+## Phase 2: Estimate Posture based on Body Angles
+
+### Posture Angle Computation
+
+Compute the following measurements:
+
+- Torso Lean
+- Forward Head Bending
+- Shoulder Tilt
+- Leg Angle
+
+### Posture Estimation
+
+Based on the computed angles, estimate posture
+
+- if leg angle less than 50, then 'standing'
+- if torso lean less than 25, then 'poor' posture
+- if forward head bending less than 15, then 'poor' posture
+- if shoulder tilt less than 10, then 'poor' posture
