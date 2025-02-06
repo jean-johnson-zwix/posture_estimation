@@ -128,12 +128,73 @@ def get_perpendicular_line(point1, point2, length=200):
         print(f"Error calculating perpendicular line: {e}")
         return (point1[0], point1[1]), point1, point2
 
-def add_legend(image, items, start_y=30):
-    for i, (text, color) in enumerate(items):
-        y = start_y + (i * 20)  # Reduced spacing
-        cv2.putText(image, text, (10, y), cv2.FONT_HERSHEY_SIMPLEX,
-                   0.5, color, 1, cv2.LINE_AA)  # Smaller font
-        cv2.line(image, (160, y-5), (200, y-5), color, 2)  # Adjusted line position
+def add_legend(
+    image_bgr,
+    items,
+    margin=20,
+    padding=14,
+    line_gap=10,
+    font=cv2.FONT_HERSHEY_SIMPLEX,
+    font_scale=0.9,          # bigger text
+    text_thickness=2,
+    swatch_len=36,
+    swatch_thickness=6,
+    bg_color=(25, 25, 25),   # dark bg
+    bg_alpha=0.65,           # transparency
+    shadow_offset=6,
+    shadow_alpha=0.35
+):
+    h, w = image_bgr.shape[:2]
+    if not items:
+        return
+
+    text_sizes = [cv2.getTextSize(t, font, font_scale, text_thickness) for t, _ in items]
+    text_ws = [ts[0][0] for ts in text_sizes]
+    text_hs = [ts[0][1] for ts in text_sizes]
+    baselines = [ts[1] for ts in text_sizes]
+
+    line_h = max(text_hs) + line_gap
+    box_w = padding * 3 + max(text_ws) + swatch_len
+    box_h = padding * 2 + line_h * len(items)
+
+    x0 = w - margin - box_w
+    y0 = margin
+    x1 = x0 + box_w
+    y1 = y0 + box_h
+
+    overlay = image_bgr.copy()
+    cv2.rectangle(
+        overlay,
+        (x0 + shadow_offset, y0 + shadow_offset),
+        (x1 + shadow_offset, y1 + shadow_offset),
+        (0, 0, 0),
+        -1
+    )
+    image_bgr[:] = cv2.addWeighted(overlay, shadow_alpha, image_bgr, 1 - shadow_alpha, 0)
+
+    overlay = image_bgr.copy()
+    cv2.rectangle(overlay, (x0, y0), (x1, y1), bg_color, -1)
+    image_bgr[:] = cv2.addWeighted(overlay, bg_alpha, image_bgr, 1 - bg_alpha, 0)
+
+    y = y0 + padding + max(text_hs)
+    for (text, color), th, base in zip(items, text_hs, baselines):
+        cv2.putText(
+            image_bgr,
+            text,
+            (x0 + padding, y),
+            font,
+            font_scale,
+            (255, 255, 255),
+            text_thickness,
+            cv2.LINE_AA
+        )
+
+        y_mid = y - th // 2
+        sx1 = x1 - padding
+        sx0 = sx1 - swatch_len
+        cv2.line(image_bgr, (sx0, y_mid), (sx1, y_mid), color, swatch_thickness)
+
+        y += line_h
 
 def calculate_midpoint(point1, point2):
     return ((point1[0] + point2[0])//2, (point1[1] + point2[1])//2)
@@ -177,10 +238,9 @@ def overlay_posture_angles(image_rgb, pose_landmarks):
         # Forward head / bending (neck+nose vs vertical)
         head_forward = calculate_angle(neck_up, nose, neck_mid)
 
-        # Shoulder tilt (shoulder line vs horizontal)
-        dx = (right_shoulder[0] - left_shoulder[0])
-        dy = (right_shoulder[1] - left_shoulder[1])
-        shoulder_tilt = abs(math.degrees(math.atan2(dy, dx + 1e-9)))  # 0 = level
+        # Nect Angle (neck+nose vs neck+hip)
+        neck_angle = calculate_angle(nose, hip_mid, neck_mid)   # angle at neck_mid
+        neck_flex = max(0.0, 180.0 - neck_angle)
 
         # draw on BGR for correct OpenCV colors
         img_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
@@ -207,11 +267,11 @@ def overlay_posture_angles(image_rgb, pose_landmarks):
 
         measurements = [
             (f"Leg Angle: {leg_angle:.0f}° ({'Standing' if is_standing else 'Sitting'})", LEG_COLOR),
-            (f"Torso Lean: {torso_lean:.0f}° ({'Good' if torso_lean < 25 else 'Poor'})", BODY_COLOR),
-            (f"Forward Head: {head_forward:.0f}° ({'Good' if head_forward < 15 else 'Poor'}) (only for side-view)", NECK_COLOR),
-            (f"Shoulder Tilt: {shoulder_tilt:.0f}° ({'Good' if shoulder_tilt < 10 else 'Poor'})", SHOULDER_COLOR),
+            (f"Torso Lean: {torso_lean:.0f}° ({'Good' if torso_lean < 20 else 'Poor'})", BODY_COLOR),
+            (f"Forward Head: {head_forward:.0f}° ({'Good' if head_forward < 35 else 'Poor'}) (only for side-view)", NECK_COLOR),
+            (f"Neck Angle: {neck_flex:.0f}° ({'Good' if neck_flex < 20 else 'Poor'})", NECK_COLOR),
         ]
-        add_legend(img_bgr, measurements, start_y=30)
+        add_legend(img_bgr, measurements, margin=20, font_scale=1.0, text_thickness=2)
 
         out_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
@@ -220,7 +280,7 @@ def overlay_posture_angles(image_rgb, pose_landmarks):
             "is_standing": is_standing,
             "torso_lean": torso_lean,
             "head_forward": head_forward,
-            "shoulder_tilt": shoulder_tilt,
+            "neck_flex": neck_flex,
         }
         return out_rgb, metrics
 

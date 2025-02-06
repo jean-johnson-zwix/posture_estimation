@@ -21,7 +21,7 @@ Compute the following measurements:
 
 - Torso Lean
 - Forward Head Bending
-- Shoulder Tilt
+- Neck Angle
 - Leg Angle
 
 ### Posture Estimation
@@ -29,6 +29,6 @@ Compute the following measurements:
 Based on the computed angles, estimate posture
 
 - if leg angle less than 50, then 'standing'
-- if torso lean less than 25, then 'poor' posture
-- if forward head bending less than 15, then 'poor' posture
-- if shoulder tilt less than 10, then 'poor' posture
+- if torso lean less than 20, then 'poor' posture
+- if forward head bending less than 35, then 'poor' posture
+- if shoulder tilt less than 20, then 'poor' posture
