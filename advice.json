@@ -1,0 +1,22 @@
+{
+	"torso_lean": {
+		"warn": "Don't lean too much",
+		"poor": "Straigten your back!"
+	},
+	"neck_flex": {
+		"warn": "Your head is too forward",
+		"poor": "Straigten your head!"
+	},
+	"head_forward": {
+		"warn": "Bad neck posture",
+		"poor": "Bring your head back"
+	},
+	"shoulder_sym": {
+		"warn": "Your shoulders are uneven",
+		"poor": "Level your shoulders"
+	},
+	"ear_offset": {
+		"warn": "Your head is too forward",
+		"poor": "Align ears over shoulder!"
+	}
+}

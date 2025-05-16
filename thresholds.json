@@ -1,0 +1,22 @@
+{
+	"torso_lean": {
+		"good": 15,
+		"warn": 25
+	},
+	"neck_flex": {
+		"good": 20,
+		"warn": 35
+	},
+	"head_forward": {
+		"good": 30,
+		"warn": 45
+	},
+	"shoulder_sym": {
+		"good": 15,
+		"warn": 30
+	},
+	"ear_offset": {
+		"good": 20,
+		"warn": 35
+	}
+}
