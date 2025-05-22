@@ -1,34 +1,61 @@
-# Posture Estimation
+# Real-Time Posture Estimation
 
-## Phase 1: Detect Posture using Media Pipe
+A real-time posture analysis tool built with MediaPipe Pose Landmarker and Gradio. 
+Detects poor sitting habits and gives actionable feedback — live, on your webcam feed.
 
-### Media Pipe
+---
 
-MediaPipe Solutions provides a suite of libraries and tools for you to quickly apply artificial intelligence (AI) and machine learning (ML) techniques in your applications.
+## Tech Stack
 
-#### Pose Landmark Detection
+- [MediaPipe Pose Landmarker](https://developers.google.com/mediapipe/solutions/vision/pose_landmarker) — pose estimation
+- [OpenCV](https://opencv.org/) — frame annotation
+- [Gradio](https://gradio.app/) — webcam UI
+- Python 3.10+
 
-The MediaPipe Pose Landmarker task lets you detect landmarks of human bodies in an image or video. You can use this task to identify key body locations, analyze posture, and categorize movements. This task uses machine learning (ML) models that work with single images or video. The task outputs body pose landmarks in image coordinates and in 3-dimensional world coordinates.
+---
 
-*Model Used:* Pose landmarker (lite)
-*Mode*: VIDEO
+## Posture Metrics
 
-## Phase 2: Estimate Posture based on Body Angles
+| Metric | What It Measures |
+|---|---|
+| **Torso Lean** | How far your back deviates from vertical |
+| **Neck Flex** | Downward bend of your neck |
+| **Head Forward** | How far your head protrudes in front of your shoulders |
+| **Shoulder Symmetry** | Height difference between left and right shoulders |
+| **Ear Offset** | Horizontal distance of your ear from your shoulder centerline |
 
-### Posture Angle Computation
 
-Compute the following measurements:
+## Getting Started
 
-- Torso Lean
-- Forward Head Bending
-- Neck Angle
-- Leg Angle
+### 1. Clone the repo
 
-### Posture Estimation
+```bash
+git clone https://github.com/your-username/posture-estimation
+cd posture-estimation
+```
 
-Based on the computed angles, estimate posture
+### 2. Create a virtual environment
 
-- if leg angle less than 50, then 'standing'
-- if torso lean less than 20, then 'poor' posture
-- if forward head bending less than 35, then 'poor' posture
-- if shoulder tilt less than 20, then 'poor' posture
+```bash
+python -m venv venv
+venv\Scripts\activate       # Windows
+source venv/bin/activate    # Mac/Linux
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Download the MediaPipe model
+
+```bash
+wget -O pose_landmarker.task https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task
+```
+
+### 5. Run the app
+
+```bash
+gradio on app.py
+```
